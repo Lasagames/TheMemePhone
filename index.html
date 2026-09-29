@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Pavé téléphonique</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 006.6 6.6l2.2-2.2a1 1 0 011-.25c1.1.37 2.3.57 3.6.57a1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.25 1z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm.5 5v5.2l4.3 2.5-.8 1.3-5-3V7z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><path d="M5 3h3v3H5zm5.5 0h3v3h-3zM16 3h3v3h-3zM5 8.5h3v3H5zm5.5 0h3v3h-3zm5.5 0h3v3h-3zM5 14h3v3H5zm5.5 0h3v3h-3zm5.5 0h3v3h-3zm-5.5 5.5h3v3h-3z"/></symbol>
+</svg>
+
+<!-- Arrière-plan (change selon le numéro appelé) -->
+<div id="bg-layer" aria-hidden="true"></div>
+
+<!-- Écran de chargement -->
+<div id="loader">
+    <div class="orb"><i></i><i></i><i></i><div class="core"><span><svg width="34" height="34"><use href="#i-phone"/></svg></span></div></div>
+    <div class="loader-title">PAVÉ</div>
+    <div class="loader-bar"><b id="loader-bar"></b></div>
+    <div id="loader-text">Démarrage...</div>
+    <button id="enter" hidden>Entrer</button>
+</div>
+
+<iframe id="music-frame" title="Musique d'ambiance" allow="autoplay" tabindex="-1" aria-hidden="true"></iframe>
+
+<main class="phone" id="phone">
+
+    <div class="statusbar">
+        <span id="clock">--:--</span>
+        <div class="notch"></div>
+        <div class="status-right">
+            <button id="music" aria-label="Couper ou remettre la musique" title="Musique" hidden>♪</button>
+            <div class="signal"><i></i><i></i><i></i><i></i></div>
+        </div>
+    </div>
+
+    <div class="views">
+
+        <!-- Clavier -->
+        <section class="view" id="view-keypad">
+            <div class="display">
+                <div class="viz" aria-hidden="true"></div>
+                <div id="number"></div>
+                <div id="status">Recherche des sons...</div>
+            </div>
+
+            <div class="keypad">
+                <button data-key="1">1<small></small></button>
+                <button data-key="2">2<small>ABC</small></button>
+                <button data-key="3">3<small>DEF</small></button>
+                <button data-key="4">4<small>GHI</small></button>
+                <button data-key="5">5<small>JKL</small></button>
+                <button data-key="6">6<small>MNO</small></button>
+                <button data-key="7">7<small>PQRS</small></button>
+                <button data-key="8">8<small>TUV</small></button>
+                <button data-key="9">9<small>WXYZ</small></button>
+                <button data-key="*">*<small></small></button>
+                <button data-key="0">0<small>+</small></button>
+                <button data-key="#">#<small></small></button>
+            </div>
+
+            <div class="dial-row">
+                <button id="callback" aria-label="Demander un rappel" title="Demander qu'on me rappelle" disabled><svg><use href="#i-phone"/></svg></button>
+                <button id="call" aria-label="Appeler"><svg><use href="#i-phone"/></svg></button>
+                <button id="clear" aria-label="Effacer" hidden>⌫</button>
+            </div>
+        </section>
+
+        <!-- Récents -->
+        <section class="view" id="view-recents" hidden>
+            <div class="recents-head">
+                <h2>Récents</h2>
+                <button id="clear-history">Effacer</button>
+            </div>
+            <ul id="history-list"></ul>
+        </section>
+
+        <!-- Écran d'appel -->
+        <section class="view" id="view-call" hidden>
+            <div class="caller">
+                <div class="avatar-wrap"><i></i><i></i><i></i><div id="avatar">?</div></div>
+                <div id="call-name"></div>
+                <div id="call-number"></div>
+                <div id="call-status">Numérotation...</div>
+                <div class="viz" id="eq" aria-hidden="true"></div>
+            </div>
+            <div class="call-actions">
+                <button id="hangup" aria-label="Raccrocher"><svg><use href="#i-phone"/></svg></button>
+                <button id="accept" aria-label="Décrocher"><svg><use href="#i-phone"/></svg></button>
+            </div>
+        </section>
+
+    </div>
+
+    <nav class="tabs">
+        <button class="active" data-tab="keypad"><svg><use href="#i-grid"/></svg>Clavier</button>
+        <button data-tab="recents"><svg><use href="#i-clock"/></svg>Récents</button>
+    </nav>
+
+</main>
+
+<script src="https://w.soundcloud.com/player/api.js"></script>
+<script>
+/* =====================================================
+   CONFIGURATION
+===================================================== */
+const SOUND_FOLDER = "sounds/";
+const PROFILE_FOLDER = "profil-images/";   // ex. profil-images/404_photo.png → photo de profil du 404
+const IMAGE_FOLDER = "images/";   // ex. images/404_image.png → fond affiché quand on appelle le 404
+const RING_DURATION = 3000;   // sonnerie (ms)
+const END_DURATION = 2400;    // durée de l'écran « Appel terminé » (ms)
+const MIN_LOADING = 2600;
+const MAX_HISTORY = 20;
+
+// Musique d'ambiance (SoundCloud) jouée hors appel, lancée par le bouton « Entrer »
+const MUSIC_URL = "https://soundcloud.com/no-copyright-musicc/no-copyright-chill-music-lofi-hip-hop-jazz-hop-music-royalty-free";
+const MUSIC_VOLUME = 35;      // 0 à 100
+
+// Demande de rappel : le contact rappelle après ce délai (ms)
+const CALLBACK_DELAY = 5000;
+const INCOMING_RING = 22000;  // au bout de ce délai sans réponse : appel manqué
+
+const $ = id => document.getElementById(id);
+const phone = $("phone"), callView = $("view-call");
+const numberDisplay = $("number"), statusDisplay = $("status");
+const callStatus = $("call-status"), historyList = $("history-list");
+const clearButton = $("clear"), callButton = $("call"), hangupButton = $("hangup"), acceptButton = $("accept"), callbackButton = $("callback");
+const enterButton = $("enter"), musicButton = $("music");
+const buttons = document.querySelectorAll("[data-key]");
+
+/* =====================================================
+   VARIABLES
+===================================================== */
+let number = "";
+let errorSound = null, ringtoneFile = null;   // "sounds/error-sounds.mp3" si présent
+const sounds = {};
+const profiles = {};      // profiles["404"] = "profil-images/404_photo.png"
+const backgrounds = {};   // backgrounds["404"] = "images/404_image.png"   // sounds["1"] = { file: "sounds/1_Maman.mp3", name: "Maman" }
+let currentAudio = null;
+let state = "idle";  // idle | ringing | incoming | connected | error | ended
+let callKey = "", callIncoming = false;
+let incomingMiss = null;
+let callbackPending = false, callbackTimer = null, callbackTick = null;
+let errorAudio = null;
+let ringTimeout = null, timerInterval = null, callStart = 0, endTimeout = null;
+let history = JSON.parse(localStorage.getItem("callHistory") || "[]");
+
+/* =====================================================
+   SONS SYNTHÉTISÉS
+===================================================== */
+let ctx = null;
+let master = null, analyser = null, freqData = null;
+
+// Tout le son de la page passe par ce bus, ce qui permet de le visualiser
+function masterBus() {
+    if (master) return master;
+    const c = audioCtx();
+    master = c.createGain();
+    analyser = c.createAnalyser();
+    analyser.fftSize = 128;
+    analyser.smoothingTimeConstant = 0.8;
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    master.connect(analyser);
+    analyser.connect(c.destination);
+    return master;
+}
+
+// Branche un élément <audio> sur le bus (si impossible, il joue normalement sans visualiseur)
+function routeAudio(audio) {
+    try { audioCtx().createMediaElementSource(audio).connect(masterBus()); }
+    catch (err) { console.warn("Visualiseur indisponible pour ce son :", err); }
+}
+
+const audioCtx = () => {
+    ctx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+};
+
+const DTMF = {
+    "1": [697, 1209], "2": [697, 1336], "3": [697, 1477],
+    "4": [770, 1209], "5": [770, 1336], "6": [770, 1477],
+    "7": [852, 1209], "8": [852, 1336], "9": [852, 1477],
+    "*": [941, 1209], "0": [941, 1336], "#": [941, 1477]
+};
+
+function tone(freqs, duration, volume = 0.08, delay = 0) {
+    const c = audioCtx(), t = c.currentTime + delay;
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(volume, t + 0.01);
+    gain.gain.setValueAtTime(volume, t + duration - 0.02);
+    gain.gain.linearRampToValueAtTime(0, t + duration);
+    gain.connect(masterBus());
+    freqs.forEach(f => {
+        const o = c.createOscillator();
+        o.frequency.value = f;
+        o.connect(gain);
+        o.start(t); o.stop(t + duration);
+    });
+}
+
+let ringInterval = null;
+function startRingTone() {
+    tone([440], 1.0, 0.06);
+    ringInterval = setInterval(() => tone([440], 1.0, 0.06), 2500);
+}
+function stopRingTone() { clearInterval(ringInterval); ringInterval = null; }
+
+// Son de fin d'appel : trois bips courts « bip bip bip »
+function hangupSound() {
+    [0, 0.27, 0.54].forEach(d => tone([850], 0.15, 0.12, d));
+}
+
+/* Sonnerie des appels entrants : lue depuis sounds/sonnerie.mp3.
+   Si le fichier est absent, une petite mélodie synthétisée la remplace. */
+let fxIn = null, tuneInterval = null, ringtoneAudio = null;
+
+function fxBus() {
+    if (fxIn) return fxIn;
+    const c = audioCtx();
+    const out = c.createGain(); out.connect(masterBus());
+    const delay = c.createDelay(); delay.delayTime.value = 0.2;
+    const fb = c.createGain(); fb.gain.value = 0.35;
+    const wet = c.createGain(); wet.gain.value = 0.45;
+    delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(out);
+    fxIn = c.createGain(); fxIn.connect(out); fxIn.connect(delay);
+    return fxIn;
+}
+
+function bell(freq, t, dur = 0.34, vol = 0.11) {
+    const c = audioCtx(), g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.connect(fxBus());
+    [["triangle", 1, 1], ["sine", 2, 0.3]].forEach(([type, m, v]) => {
+        const o = c.createOscillator(), og = c.createGain();
+        o.type = type; o.frequency.value = freq * m; og.gain.value = v;
+        o.connect(og); og.connect(g);
+        o.start(t); o.stop(t + dur + 0.05);
+    });
+}
+
+function playTune() {
+    const t = audioCtx().currentTime + 0.02;
+    [[988, 0], [1319, .16], [1175, .32], [1319, .48], [988, .8], [1319, .96], [1568, 1.12], [1319, 1.28], [1760, 1.6]]
+        .forEach(([f, d]) => bell(f, t + d));
+}
+
+function startIncomingRing() {
+    if (ringtoneFile) {
+        ringtoneAudio = new Audio(ringtoneFile);
+        ringtoneAudio.loop = true;
+        routeAudio(ringtoneAudio);
+        ringtoneAudio.play().catch(() => {});
+        return;
+    }
+    playTune();
+    tuneInterval = setInterval(playTune, 2600);
+}
+
+function stopIncomingRing() {
+    clearInterval(tuneInterval); tuneInterval = null;
+    if (ringtoneAudio) { ringtoneAudio.pause(); ringtoneAudio = null; }
+}
+
+function errorTone() {
+    [950, 1400, 1800].forEach((f, i) => tone([f], 0.28, 0.07, i * 0.32));
+}
+
+/* =====================================================
+   MUSIQUE D'AMBIANCE (SoundCloud)
+   Jouée hors appel, mise en pause pendant les appels.
+===================================================== */
+let scWidget = null, musicReady = false, musicEnabled = true;
+
+function startMusic() {
+    if (!MUSIC_URL || typeof SC === "undefined") {   // API SoundCloud bloquée ou hors ligne
+        console.warn("Lecteur SoundCloud indisponible.");
+        return;
+    }
+    const frame = $("music-frame");
+    frame.src = "https://w.soundcloud.com/player/?url=" + encodeURIComponent(MUSIC_URL) +
+        "&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false";
+
+    scWidget = SC.Widget(frame);
+    scWidget.bind(SC.Widget.Events.READY, () => {
+        musicReady = true;
+        scWidget.setVolume(MUSIC_VOLUME);
+        if (musicEnabled && state === "idle") scWidget.play();
+        else scWidget.pause();
+    });
+    scWidget.bind(SC.Widget.Events.FINISH, () => {   // lecture en boucle
+        if (musicEnabled && state === "idle") { scWidget.seek(0); scWidget.play(); }
+    });
+    musicButton.hidden = false;
+}
+
+function pauseMusic() { if (scWidget && musicReady) scWidget.pause(); }
+function resumeMusic() { if (scWidget && musicReady && musicEnabled) scWidget.play(); }
+
+musicButton.addEventListener("click", () => {
+    musicEnabled = !musicEnabled;
+    musicButton.classList.toggle("off", !musicEnabled);
+    if (musicEnabled && state === "idle") resumeMusic();
+    else pauseMusic();
+});
+
+/* =====================================================
+   ÉCRAN DE CHARGEMENT
+===================================================== */
+const loaderMessages = ["Démarrage...", "Connexion au réseau...", "Recherche des sons...", "Réglage du volume...", "Prêt à composer"];
+
+function setLoader(pct, text) {
+    $("loader-bar").style.width = pct + "%";
+    if (text) $("loader-text").textContent = text;
+}
+
+async function boot() {
+    const started = Date.now();
+    setLoader(10, loaderMessages[0]);
+    let step = 1;
+    const msgTimer = setInterval(() => {
+        if (step < 4) setLoader(10 + step * 20, loaderMessages[step++]);
+    }, MIN_LOADING / 5);
+
+    await Promise.all([
+        loadSounds(),
+        loadImages(IMAGE_FOLDER, backgrounds),
+        loadImages(PROFILE_FOLDER, profiles)
+    ]);
+    renderHistory();                    // les photos de profil sont maintenant connues
+    await new Promise(r => setTimeout(r, Math.max(0, MIN_LOADING - (Date.now() - started))));
+
+    clearInterval(msgTimer);
+    setLoader(100, loaderMessages[4]);
+    await new Promise(r => setTimeout(r, 450));
+    enterButton.hidden = false;         // le site s'ouvre seulement au clic
+    enterButton.focus();
+}
+
+enterButton.addEventListener("click", () => {
+    audioCtx();                         // le clic autorise le son
+    startMusic();
+    $("loader").classList.add("hide");
+});
+
+/* =====================================================
+   DÉTECTION DES SONS
+   Fichier "1_Maman.mp3" → numéro 1, nom « Maman »
+===================================================== */
+async function loadSounds() {
+    try {
+        const response = await fetch(SOUND_FOLDER);
+        if (!response.ok) throw new Error("Impossible d'accéder au dossier sounds/");
+
+        const page = new DOMParser().parseFromString(await response.text(), "text/html");
+        let found = 0;
+
+        page.querySelectorAll("a").forEach(link => {
+            const href = link.getAttribute("href");
+            if (!href || !href.toLowerCase().endsWith(".mp3")) return;
+
+            const fileName = decodeURIComponent(href.split("/").pop());
+
+            if (fileName.toLowerCase() === "sonnerie.mp3") {
+                ringtoneFile = SOUND_FOLDER + fileName;
+                return;
+            }
+
+            // Son joué quand le numéro n'existe pas
+            if (fileName.toLowerCase() === "error-sounds.mp3") {
+                errorSound = SOUND_FOLDER + fileName;
+                return;
+            }
+
+            const match = fileName.match(/^([^_]+)_(.+)\.mp3$/i);
+            if (!match) return;
+
+            sounds[match[1]] = {
+                file: SOUND_FOLDER + fileName,
+                name: match[2].replace(/_/g, " ").trim()
+            };
+            found++;
+        });
+
+        statusDisplay.textContent = found === 0
+            ? "Aucun son détecté"
+            : `${found} contact${found > 1 ? "s" : ""} détecté${found > 1 ? "s" : ""}`;
+
+    } catch (error) {
+        console.error(error);
+        statusDisplay.textContent = "Erreur de détection des sons";
+    }
+}
+
+/* =====================================================
+   IMAGES PAR NUMÉRO
+   images/        "404_image.png" → arrière-plan du numéro 404
+   profil-images/ "404_photo.png" → photo de profil du numéro 404
+===================================================== */
+async function loadImages(folder, target) {
+    try {
+        const response = await fetch(folder);
+        if (!response.ok) throw new Error(`Dossier ${folder} introuvable`);
+
+        const page = new DOMParser().parseFromString(await response.text(), "text/html");
+
+        page.querySelectorAll("a").forEach(link => {
+            const href = link.getAttribute("href");
+            if (!href) return;
+
+            const fileName = decodeURIComponent(href.split("/").pop());
+            const match = fileName.match(/^([^_.]+)(?:_.*)?\.(png|jpe?g|webp|gif|avif)$/i);
+            if (!match) return;
+
+            target[match[1]] = folder + encodeURIComponent(fileName);
+            new Image().src = target[match[1]];           // préchargement : pas de délai à l'appel
+        });
+
+        console.log(`Images détectées (${folder}) :`, target);
+    } catch (error) {
+        console.warn("Images non chargées :", error.message);
+    }
+}
+
+const bgLayer = $("bg-layer");
+
+function applyBackground(key) {
+    // priorité : arrière-plan dédié, sinon la photo de profil
+    const src = backgrounds[key] || profiles[key];
+    if (!src) return;
+    bgLayer.style.backgroundImage = `url("${src}")`;
+    bgLayer.classList.add("show");
+}
+
+function resetBackground() {            // le fond de base revient
+    bgLayer.classList.remove("show");
+}
+
+/* =====================================================
+   OUTILS
+===================================================== */
+const nameOf = key => sounds[key] ? sounds[key].name : key;
+const initialOf = key => sounds[key] ? sounds[key].name.charAt(0).toUpperCase() : "#";
+
+function formatDuration(ms) {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const mm = String(m).padStart(2, "0"), ss = String(sec).padStart(2, "0");
+    return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function updateClock() {
+    $("clock").textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function showTab(tab) {
+    $("view-keypad").hidden = tab !== "keypad";
+    $("view-recents").hidden = tab !== "recents";
+    document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+}
+document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+/* =====================================================
+   CHRONO
+===================================================== */
+function startTimer() {
+    callStart = Date.now();
+    callStatus.textContent = "00:00";
+    timerInterval = setInterval(() => {
+        callStatus.textContent = formatDuration(Date.now() - callStart);
+    }, 250);
+}
+
+function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    return callStart ? Date.now() - callStart : 0;
+}
+
+/* =====================================================
+   APPEL
+===================================================== */
+function setCallView(cls) {
+    callView.className = "view " + cls;
+    callView.hidden = false;
+    pauseMusic();                       // pas de musique pendant un appel
+}
+
+// revealed = false : seul le numéro est visible. true : le nom du contact apparaît.
+function showCaller(key, revealed) {
+    const avatar = $("avatar");
+    const photo = revealed ? profiles[key] : null;      // la photo n'apparaît qu'au décrochage
+    avatar.classList.toggle("has-photo", !!photo);
+    if (photo) avatar.style.backgroundImage = `url("${photo}")`;
+    else avatar.style.removeProperty("background-image");
+    avatar.textContent = photo ? "" : revealed ? initialOf(key) : "?";
+    $("call-name").textContent = revealed ? nameOf(key) : key;
+    $("call-number").textContent = revealed ? key : "";
+}
+
+function startCall() {
+    if (!number || state !== "idle") return;
+
+    const dialed = number;
+    state = "ringing";
+    callStart = 0;
+
+    callKey = dialed;
+    callIncoming = false;
+    showCaller(dialed, false);          // le nom n'est pas révélé avant le décrochage
+    callStatus.textContent = "Numérotation...";
+    setCallView("ringing");
+    startRingTone();
+
+    setTimeout(() => { if (state === "ringing") callStatus.textContent = "Ça sonne..."; }, 700);
+
+    ringTimeout = setTimeout(() => {
+        stopRingTone();
+        if (sounds[dialed]) connectCall(dialed);
+        else failCall(dialed);
+    }, RING_DURATION);
+}
+
+function connectCall(key) {
+    state = "connected";
+    applyBackground(key);               // décroché : l'image du numéro apparaît
+    showCaller(key, true);              // décroché : on révèle le nom
+    setCallView("connected");
+    startTimer();
+
+    currentAudio = new Audio(sounds[key].file);
+    routeAudio(currentAudio);
+    currentAudio.addEventListener("ended", () => endCall(key));
+    currentAudio.play().catch(err => {
+        console.warn("Lecture impossible :", err);
+        endCall(key);
+    });
+}
+
+function failCall(key) {
+    addHistory(key, 0, false);
+
+    if (!errorSound) {                       // pas de fichier : tonalité synthétique
+        errorTone();
+        showEnded(key, "Numéro non attribué", 0, false);
+        return;
+    }
+
+    // Lecture de error-sounds.mp3, l'écran reste jusqu'à la fin du son
+    state = "error";
+    setCallView("ended");
+    callStatus.textContent = "Numéro non attribué";
+    phone.classList.remove("hang-flash");
+    void phone.offsetWidth;
+    phone.classList.add("hang-flash");
+
+    errorAudio = new Audio(errorSound);
+    routeAudio(errorAudio);
+    errorAudio.addEventListener("ended", () => closeCall(key, "Numéro non attribué", 0, false));
+    errorAudio.play().catch(err => {
+        console.warn("Lecture impossible :", err);
+        errorTone();
+        endTimeout = setTimeout(() => closeCall(key, "Numéro non attribué", 0, false), END_DURATION);
+    });
+}
+
+// Fin d'appel (son terminé ou raccroché)
+function endCall(key) {
+    if (state === "ended" || state === "idle") return;
+
+    if (state === "error") {                 // raccroche pendant le son d'erreur
+        if (errorAudio) errorAudio.pause();
+        closeCall(key, "Numéro non attribué", 0, false);
+        return;
+    }
+
+    stopRingTone();
+    clearTimeout(ringTimeout);
+
+    const wasConnected = state === "connected";
+    const duration = stopTimer();
+
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+
+    hangupSound();
+
+    if (wasConnected) addHistory(key, duration, true);
+    showEnded(key, wasConnected ? "Appel terminé" : "Appel annulé", duration, wasConnected);
+}
+
+// Animation de fin d'appel puis retour au clavier
+function showEnded(key, message, duration, showDuration) {
+    state = "ended";
+    resetBackground();                  // fin d'appel : retour au fond de base
+    setCallView("ended");
+    callStatus.textContent = showDuration ? `${message} · ${formatDuration(duration)}` : message;
+
+    phone.classList.remove("hang-flash");
+    void phone.offsetWidth;                 // relance l'animation
+    phone.classList.add("hang-flash");
+
+    endTimeout = setTimeout(() => closeCall(key, message, duration, showDuration), END_DURATION);
+}
+
+// Retour au clavier
+function closeCall(key, message, duration, showDuration) {
+    clearTimeout(endTimeout);
+    if (errorAudio) { errorAudio = null; }
+    callView.hidden = true;
+    resetBackground();
+    phone.classList.remove("hang-flash");
+    state = "idle";
+    resumeMusic();
+    if (!callIncoming) number = "";     // un appel entrant ne vide pas le numéro en cours de saisie
+    callIncoming = false;
+    updateDisplay();
+    statusDisplay.textContent = showDuration ? `${nameOf(key)} · ${formatDuration(duration)}` : message;
+}
+
+function hangupAction() {
+    if (state === "incoming") declineIncoming();
+    else endCall(callKey);
+}
+hangupButton.addEventListener("click", hangupAction);
+acceptButton.addEventListener("click", () => acceptIncoming());
+callbackButton.addEventListener("click", requestCallback);
+callButton.addEventListener("click", startCall);
+
+/* =====================================================
+   APPELS ENTRANTS ALÉATOIRES
+===================================================== */
+// Demande de rappel : on attend CALLBACK_DELAY, puis le contact nous appelle
+function requestCallback() {
+    if (!number || state !== "idle" || callbackPending) return;
+
+    const key = number;
+    callbackPending = true;
+    number = "";
+    updateDisplay();
+
+    tone([1046], 0.08, 0.08);                       // petit bip d'envoi
+    tone([1318], 0.1, 0.08, 0.1);
+
+    const endAt = Date.now() + CALLBACK_DELAY;
+    const tick = () => {
+        statusDisplay.textContent = `Demande envoyée à ${key} · rappel dans ${Math.max(1, Math.ceil((endAt - Date.now()) / 1000))} s`;
+    };
+    tick();
+    callbackTick = setInterval(tick, 250);
+    callbackTimer = setTimeout(() => { clearInterval(callbackTick); deliverCallback(key); }, CALLBACK_DELAY);
+}
+
+function deliverCallback(key) {
+    if (state !== "idle") {                         // déjà en appel : on réessaie un peu plus tard
+        callbackTimer = setTimeout(() => deliverCallback(key), 1500);
+        return;
+    }
+    callbackPending = false;
+    updateDisplay();
+
+    if (!sounds[key]) {                             // numéro inexistant : personne ne rappelle
+        statusDisplay.textContent = `${key} n'a pas rappelé`;
+        return;
+    }
+    startIncoming(key);
+}
+
+function startIncoming(key) {
+    state = "incoming";
+    callKey = key;
+    callIncoming = true;
+
+    showCaller(key, false);                         // on ne voit que le numéro
+    callStatus.textContent = "Appel entrant...";
+    setCallView("incoming");
+    startIncomingRing();
+    if (navigator.vibrate) navigator.vibrate([300, 200, 300, 200, 300]);
+
+    incomingMiss = setTimeout(() => declineIncoming(true), INCOMING_RING);
+}
+
+function acceptIncoming() {
+    if (state !== "incoming") return;
+    clearTimeout(incomingMiss);
+    stopIncomingRing();
+    connectCall(callKey);
+}
+
+function declineIncoming(missed = false) {
+    if (state !== "incoming") return;
+    clearTimeout(incomingMiss);
+    stopIncomingRing();
+    addHistory(callKey, 0, false, true);
+    hangupSound();
+    showEnded(callKey, missed ? "Appel manqué" : "Appel refusé", 0, false);
+}
+
+/* =====================================================
+   HISTORIQUE
+===================================================== */
+function addHistory(key, duration, answered, incoming = callIncoming) {
+    history.unshift({ number: key, name: answered ? nameOf(key) : key, duration, answered, incoming, time: Date.now() });
+    history = history.slice(0, MAX_HISTORY);
+    try { localStorage.setItem("callHistory", JSON.stringify(history)); } catch {}
+    renderHistory();
+}
+
+function renderHistory() {
+    historyList.innerHTML = "";
+
+    if (!history.length) {
+        historyList.innerHTML = '<li class="empty">Aucun appel récent</li>';
+        return;
+    }
+
+    history.forEach(item => {
+        const li = document.createElement("li");
+        const time = new Date(item.time).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+        li.innerHTML = `
+            <div class="avatar-sm">${item.answered ? (item.name || "#").charAt(0).toUpperCase() : "#"}</div>
+            <div class="h-info">
+                <div class="h-name ${item.answered ? "" : "missed"}"></div>
+                <div class="h-sub">${item.answered ? (item.incoming ? "Entrant · " : "Sortant · ") + formatDuration(item.duration) : (item.incoming ? "Appel manqué" : "Sans réponse")}</div>
+            </div>
+            <div class="h-time">${time}</div>`;
+        li.querySelector(".h-name").textContent = item.name;
+        if (item.answered && profiles[item.number]) {
+            const av = li.querySelector(".avatar-sm");
+            av.textContent = "";
+            av.style.backgroundImage = `url("${profiles[item.number]}")`;
+            av.style.backgroundSize = "cover";
+            av.style.backgroundPosition = "center";
+        }   // évite l'injection HTML
+        li.addEventListener("click", () => {
+            if (state !== "idle") return;
+            number = item.number;
+            updateDisplay();
+            showTab("keypad");
+        });
+        historyList.appendChild(li);
+    });
+}
+
+$("clear-history").addEventListener("click", () => {
+    history = [];
+    localStorage.removeItem("callHistory");
+    renderHistory();
+});
+
+/* =====================================================
+   AFFICHAGE ET TOUCHES
+===================================================== */
+function updateDisplay() {
+    numberDisplay.textContent = number;
+    numberDisplay.style.setProperty("--shrink", number.length > 12 ? .7 : number.length > 9 ? .85 : 1);
+    clearButton.hidden = !number;
+    callbackButton.disabled = !number || callbackPending || state !== "idle";
+    callbackButton.classList.toggle("pending", callbackPending);
+}
+
+function pressKey(key) {
+    if (state !== "idle") return;
+    number += key;
+    updateDisplay();
+    if (DTMF[key]) tone(DTMF[key], 0.12);
+    if (navigator.vibrate) navigator.vibrate(10);
+}
+
+function deleteKey() {
+    if (state !== "idle") return;
+    number = number.slice(0, -1);
+    updateDisplay();
+}
+
+buttons.forEach(b => b.addEventListener("click", () => pressKey(b.dataset.key)));
+clearButton.addEventListener("click", deleteKey);
+
+/* =====================================================
+   CLAVIER DU PC + COLLER
+===================================================== */
+document.addEventListener("keydown", event => {
+    const key = event.key;
+    if (!$("loader").classList.contains("hide")) return;   // écran d'accueil encore visible
+    if (state === "idle" && $("view-keypad").hidden) return;
+
+    if (key.length === 1 && "0123456789*#".includes(key)) {
+        const button = document.querySelector(`[data-key="${CSS.escape(key)}"]`);
+        if (button) {
+            button.classList.add("pressed");
+            setTimeout(() => button.classList.remove("pressed"), 100);
+        }
+        pressKey(key);
+    }
+    if (key === "Backspace") deleteKey();
+    if (key === "Enter") { state === "idle" ? startCall() : state === "incoming" ? acceptIncoming() : endCall(callKey); }
+    if (key === "Escape") hangupAction();
+});
+
+document.addEventListener("paste", event => {
+    if (state !== "idle") return;
+    const text = (event.clipboardData.getData("text") || "").replace(/[^0-9*#]/g, "");
+    if (text) { number += text; updateDisplay(); }
+});
+
+/* =====================================================
+   VISUALISEUR SONORE
+===================================================== */
+const BARS = 16;
+document.querySelectorAll(".viz").forEach(v => {
+    for (let i = 0; i < BARS; i++) v.appendChild(document.createElement("i"));
+});
+const vizBars = [...document.querySelectorAll(".viz")].map(v => [...v.children]);
+
+function drawViz() {
+    requestAnimationFrame(drawViz);
+    if (analyser) analyser.getByteFrequencyData(freqData);
+
+    vizBars.forEach(bars => bars.forEach((bar, i) => {
+        let v = 0;
+        if (analyser) {
+            // les barres suivent les fréquences, du grave à l'aigu (échelle logarithmique)
+            const idx = Math.min(freqData.length - 1, Math.round(Math.pow(48, i / (BARS - 1))));
+            v = freqData[idx] / 255;
+        }
+        bar.style.transform = `scaleY(${Math.max(0.06, Math.min(1, v * 1.25))})`;
+    }));
+}
+
+/* =====================================================
+   DÉMARRAGE
+===================================================== */
+drawViz();
+updateClock();
+setInterval(updateClock, 15000);
+updateDisplay();
+renderHistory();
+boot();
+</script>
+</body>
+</html>
