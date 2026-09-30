@@ -1,0 +1,30 @@
+name: Générer manifest.json
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sounds/**"
+      - "images/**"
+      - "profil-images/**"
+      - "generate-manifest.js"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Générer manifest.json
+        run: node generate-manifest.js
+
+      - name: Publier le manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git diff --cached --quiet || (git commit -m "Mise à jour de manifest.json" && git push)
