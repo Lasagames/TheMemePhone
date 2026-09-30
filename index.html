@@ -138,9 +138,9 @@ const buttons = document.querySelectorAll("[data-key]");
 ===================================================== */
 let number = "";
 let errorSound = null, ringtoneFile = null;   // "sounds/error-sounds.mp3" si présent
-const sounds = {};
+const sounds = {};        // sounds["1"] = { file: "sounds/1_Maman.mp3", name: "Maman" }
 const profiles = {};      // profiles["404"] = "profil-images/404_photo.png"
-const backgrounds = {};   // backgrounds["404"] = "images/404_image.png"   // sounds["1"] = { file: "sounds/1_Maman.mp3", name: "Maman" }
+const backgrounds = {};   // backgrounds["404"] = "images/404_image.png"
 let currentAudio = null;
 let state = "idle";  // idle | ringing | incoming | connected | error | ended
 let callKey = "", callIncoming = false;
@@ -352,31 +352,84 @@ enterButton.addEventListener("click", () => {
 });
 
 /* =====================================================
+   LISTE DES FICHIERS D'UN DOSSIER
+   GitHub Pages ne fournit pas la liste des fichiers d'un dossier (contrairement
+   à Live Server). On essaie donc, dans l'ordre :
+   1. le listing du dossier (Live Server / serveur local)
+   2. manifest.json (généré automatiquement, voir generate-manifest.js)
+   3. l'API GitHub (si le site est sur github.io)
+===================================================== */
+let manifestCache = null;
+
+async function getManifest() {
+    if (manifestCache) return manifestCache;
+    try {
+        const res = await fetch("manifest.json", { cache: "no-cache" });
+        manifestCache = res.ok ? await res.json() : {};
+    } catch { manifestCache = {}; }
+    return manifestCache;
+}
+
+const safeDecode = s => { try { return decodeURIComponent(s); } catch { return s; } };
+
+async function listFiles(folder) {
+    const name = folder.replace(/\/$/, "");
+
+    // 1. listing du dossier
+    try {
+        const res = await fetch(folder);
+        if (res.ok) {
+            const page = new DOMParser().parseFromString(await res.text(), "text/html");
+            const files = [...page.querySelectorAll("a")]
+                .map(a => a.getAttribute("href") || "")
+                .filter(Boolean)
+                .map(href => safeDecode(href.split("/").pop()))
+                .filter(Boolean);
+            if (files.length) return files;
+        }
+    } catch {}
+
+    // 2. manifest.json
+    const manifest = await getManifest();
+    if (Array.isArray(manifest[name])) return manifest[name];
+
+    // 3. API GitHub (GitHub Pages sans manifest)
+    if (location.hostname.endsWith(".github.io")) {
+        try {
+            const owner = location.hostname.split(".")[0];
+            const seg = location.pathname.split("/").filter(Boolean)[0];
+            const repo = seg && !seg.includes(".") ? seg : location.hostname;
+            const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${name}`);
+            if (res.ok) {
+                const list = await res.json();
+                return list.filter(f => f.type === "file").map(f => f.name);
+            }
+        } catch {}
+    }
+
+    throw new Error(`Impossible de lister le dossier ${folder}`);
+}
+
+/* =====================================================
    DÉTECTION DES SONS
    Fichier "1_Maman.mp3" → numéro 1, nom « Maman »
 ===================================================== */
 async function loadSounds() {
     try {
-        const response = await fetch(SOUND_FOLDER);
-        if (!response.ok) throw new Error("Impossible d'accéder au dossier sounds/");
-
-        const page = new DOMParser().parseFromString(await response.text(), "text/html");
+        const files = await listFiles(SOUND_FOLDER);
         let found = 0;
 
-        page.querySelectorAll("a").forEach(link => {
-            const href = link.getAttribute("href");
-            if (!href || !href.toLowerCase().endsWith(".mp3")) return;
-
-            const fileName = decodeURIComponent(href.split("/").pop());
+        files.forEach(fileName => {
+            if (!fileName.toLowerCase().endsWith(".mp3")) return;
 
             if (fileName.toLowerCase() === "sonnerie.mp3") {
-                ringtoneFile = SOUND_FOLDER + fileName;
+                ringtoneFile = SOUND_FOLDER + encodeURIComponent(fileName);
                 return;
             }
 
             // Son joué quand le numéro n'existe pas
             if (fileName.toLowerCase() === "error-sounds.mp3") {
-                errorSound = SOUND_FOLDER + fileName;
+                errorSound = SOUND_FOLDER + encodeURIComponent(fileName);
                 return;
             }
 
@@ -384,7 +437,7 @@ async function loadSounds() {
             if (!match) return;
 
             sounds[match[1]] = {
-                file: SOUND_FOLDER + fileName,
+                file: SOUND_FOLDER + encodeURIComponent(fileName),
                 name: match[2].replace(/_/g, " ").trim()
             };
             found++;
@@ -407,16 +460,9 @@ async function loadSounds() {
 ===================================================== */
 async function loadImages(folder, target) {
     try {
-        const response = await fetch(folder);
-        if (!response.ok) throw new Error(`Dossier ${folder} introuvable`);
+        const files = await listFiles(folder);
 
-        const page = new DOMParser().parseFromString(await response.text(), "text/html");
-
-        page.querySelectorAll("a").forEach(link => {
-            const href = link.getAttribute("href");
-            if (!href) return;
-
-            const fileName = decodeURIComponent(href.split("/").pop());
+        files.forEach(fileName => {
             const match = fileName.match(/^([^_.]+)(?:_.*)?\.(png|jpe?g|webp|gif|avif)$/i);
             if (!match) return;
 
@@ -635,7 +681,7 @@ callbackButton.addEventListener("click", requestCallback);
 callButton.addEventListener("click", startCall);
 
 /* =====================================================
-   APPELS ENTRANTS ALÉATOIRES
+   DEMANDE DE RAPPEL / APPELS ENTRANTS
 ===================================================== */
 // Demande de rappel : on attend CALLBACK_DELAY, puis le contact nous appelle
 function requestCallback() {
@@ -731,14 +777,14 @@ function renderHistory() {
                 <div class="h-sub">${item.answered ? (item.incoming ? "Entrant · " : "Sortant · ") + formatDuration(item.duration) : (item.incoming ? "Appel manqué" : "Sans réponse")}</div>
             </div>
             <div class="h-time">${time}</div>`;
-        li.querySelector(".h-name").textContent = item.name;
+        li.querySelector(".h-name").textContent = item.name;   // évite l'injection HTML
         if (item.answered && profiles[item.number]) {
             const av = li.querySelector(".avatar-sm");
             av.textContent = "";
             av.style.backgroundImage = `url("${profiles[item.number]}")`;
             av.style.backgroundSize = "cover";
             av.style.backgroundPosition = "center";
-        }   // évite l'injection HTML
+        }
         li.addEventListener("click", () => {
             if (state !== "idle") return;
             number = item.number;
