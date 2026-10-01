@@ -31,6 +31,7 @@
 <main class="phone" id="phone">
 
     <div class="statusbar">
+        <span class="brand"><svg><use href="#i-phone"/></svg>PAVÉ</span>
         <span id="clock">--:--</span>
         <div class="notch"></div>
         <div class="status-right">
@@ -69,6 +70,7 @@
                 <button id="call" aria-label="Appeler"><svg><use href="#i-phone"/></svg></button>
                 <button id="clear" aria-label="Effacer" hidden>⌫</button>
             </div>
+            <p class="hint">Clavier : 0-9 pour composer · Entrée pour appeler · Échap pour raccrocher · Ctrl+V pour coller · double-clic sur un récent pour rappeler</p>
         </section>
 
         <!-- Récents -->
@@ -94,6 +96,14 @@
                 <button id="accept" aria-label="Décrocher"><svg><use href="#i-phone"/></svg></button>
             </div>
         </section>
+
+        <!-- Colonne de droite sur ordinateur quand aucun appel n'est en cours -->
+        <aside class="stage-idle">
+            <div class="stage-icon"><svg><use href="#i-phone"/></svg></div>
+            <h3>Aucun appel en cours</h3>
+            <p>Compose un numéro sur le pavé ou clique sur un appel récent.</p>
+            <div class="viz" aria-hidden="true"></div>
+        </aside>
 
     </div>
 
@@ -138,9 +148,9 @@ const buttons = document.querySelectorAll("[data-key]");
 ===================================================== */
 let number = "";
 let errorSound = null, ringtoneFile = null;   // "sounds/error-sounds.mp3" si présent
-const sounds = {};        // sounds["1"] = { file: "sounds/1_Maman.mp3", name: "Maman" }
+const sounds = {};
 const profiles = {};      // profiles["404"] = "profil-images/404_photo.png"
-const backgrounds = {};   // backgrounds["404"] = "images/404_image.png"
+const backgrounds = {};   // backgrounds["404"] = "images/404_image.png"   // sounds["1"] = { file: "sounds/1_Maman.mp3", name: "Maman" }
 let currentAudio = null;
 let state = "idle";  // idle | ringing | incoming | connected | error | ended
 let callKey = "", callIncoming = false;
@@ -352,6 +362,10 @@ enterButton.addEventListener("click", () => {
 });
 
 /* =====================================================
+   DÉTECTION DES SONS
+   Fichier "1_Maman.mp3" → numéro 1, nom « Maman »
+===================================================== */
+/* =====================================================
    LISTE DES FICHIERS D'UN DOSSIER
    GitHub Pages ne fournit pas la liste des fichiers d'un dossier (contrairement
    à Live Server). On essaie donc, dans l'ordre :
@@ -410,10 +424,6 @@ async function listFiles(folder) {
     throw new Error(`Impossible de lister le dossier ${folder}`);
 }
 
-/* =====================================================
-   DÉTECTION DES SONS
-   Fichier "1_Maman.mp3" → numéro 1, nom « Maman »
-===================================================== */
 async function loadSounds() {
     try {
         const files = await listFiles(SOUND_FOLDER);
@@ -681,7 +691,7 @@ callbackButton.addEventListener("click", requestCallback);
 callButton.addEventListener("click", startCall);
 
 /* =====================================================
-   DEMANDE DE RAPPEL / APPELS ENTRANTS
+   APPELS ENTRANTS ALÉATOIRES
 ===================================================== */
 // Demande de rappel : on attend CALLBACK_DELAY, puis le contact nous appelle
 function requestCallback() {
@@ -777,19 +787,25 @@ function renderHistory() {
                 <div class="h-sub">${item.answered ? (item.incoming ? "Entrant · " : "Sortant · ") + formatDuration(item.duration) : (item.incoming ? "Appel manqué" : "Sans réponse")}</div>
             </div>
             <div class="h-time">${time}</div>`;
-        li.querySelector(".h-name").textContent = item.name;   // évite l'injection HTML
+        li.querySelector(".h-name").textContent = item.name;
         if (item.answered && profiles[item.number]) {
             const av = li.querySelector(".avatar-sm");
             av.textContent = "";
             av.style.backgroundImage = `url("${profiles[item.number]}")`;
             av.style.backgroundSize = "cover";
             av.style.backgroundPosition = "center";
-        }
+        }   // évite l'injection HTML
         li.addEventListener("click", () => {
             if (state !== "idle") return;
             number = item.number;
             updateDisplay();
             showTab("keypad");
+        });
+        li.addEventListener("dblclick", () => {         // ordinateur : double-clic = rappeler
+            if (state !== "idle") return;
+            number = item.number;
+            updateDisplay();
+            startCall();
         });
         historyList.appendChild(li);
     });
@@ -832,10 +848,12 @@ clearButton.addEventListener("click", deleteKey);
 /* =====================================================
    CLAVIER DU PC + COLLER
 ===================================================== */
+const isDesktop = window.matchMedia("(min-width: 1000px) and (min-height: 560px) and (pointer: fine)");
+
 document.addEventListener("keydown", event => {
     const key = event.key;
     if (!$("loader").classList.contains("hide")) return;   // écran d'accueil encore visible
-    if (state === "idle" && $("view-keypad").hidden) return;
+    if (state === "idle" && $("view-keypad").hidden && !isDesktop.matches) return;
 
     if (key.length === 1 && "0123456789*#".includes(key)) {
         const button = document.querySelector(`[data-key="${CSS.escape(key)}"]`);
